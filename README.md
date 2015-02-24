@@ -43,6 +43,19 @@ Usage of ./gothere:
 To update the URL mapping without downtime, edit urls.txt and send SIGHUP. 
 This causes gothere to reload the mappings while continuing to serve HTTP.
 
+## How do I daemonize it?
+
+I recommend using the excellent [supervisord](http://supervisord.org). Here's an 
+example program block for /etc/supervisor/supervisord.conf
+
+```bash
+[program:gothere]
+command=/go/src/github.com/kmanley/gothere/gothere -port=80 -defaultUrl=http://whatever.com
+directory=/go/src/github.com/kmanley/gothere
+stdout_logfile=/var/log/gothere-stdout
+stderr_logfile=/var/log/gothere-stderr
+```
+
 ### License
 
 MIT License
