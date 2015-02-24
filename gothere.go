@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	_ "github.com/davecgh/go-spew/spew"
 	"log"
 	"net/http"
 	"os"
@@ -37,10 +36,13 @@ func loadMap() {
 		if strings.HasPrefix(line, "#") || len(line) < 1 {
 			continue
 		}
-		// TODO: warn if duplicate key!
 		parts := strings.Split(line, " ")
 		if len(parts) == 2 {
-			urls[strings.ToLower(strings.TrimSpace(parts[0]))] = strings.TrimSpace(parts[1])
+			key := strings.ToLower(strings.TrimSpace(parts[0]))
+			if _, ok := urls[key]; ok {
+				log.Printf("duplicate key %s!", key)
+			}
+			urls[key] = strings.TrimSpace(parts[1])
 		} else {
 			log.Printf("skipping malformed line:\n%s", line)
 		}
@@ -49,7 +51,6 @@ func loadMap() {
 		log.Println(err)
 	}
 	log.Printf("loaded %d mappings", len(urls))
-	// spew.Dump(urls)
 	atomic.StorePointer(&urlmap, (unsafe.Pointer)(&urls))
 }
 
@@ -57,10 +58,10 @@ func loadMap() {
 // we redirect to the target. Otherwise we redirect to
 // the default URL if specified.
 func handler(w http.ResponseWriter, r *http.Request) {
-	log.Println(r.URL.Path)
 	urls := *(*UrlMap)(atomic.LoadPointer(&urlmap))
 	dest, ok := urls[strings.ToLower(r.URL.Path)]
 	if !ok {
+		log.Printf("no match for %s", r.URL.Path)
 		if defaultUrl != "" {
 			http.Redirect(w, r, defaultUrl, 302)
 			return
@@ -69,6 +70,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	log.Printf("%s -> %s", r.URL.Path, dest)
 	http.Redirect(w, r, dest, 302)
 }
 
