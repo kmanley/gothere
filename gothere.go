@@ -5,12 +5,13 @@ import (
 	"flag"
 	"fmt"
 	"github.com/golang/glog"
-	#"github.com/mailgun/manners"
+	"github.com/mailgun/manners"
 	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -23,7 +24,9 @@ type UrlMap map[string]string
 // use an expensive mutex in the HTTP handler
 var urlmap unsafe.Pointer
 var defaultUrl string
+var hupChan = make(chan os.Signal, 1)
 var sigChan = make(chan os.Signal, 1)
+var quitChan = make(chan bool, 1)
 
 // loads the URL mappings from urls.txt
 func loadMap() {
@@ -43,6 +46,7 @@ func loadMap() {
 		if len(parts) == 2 {
 			key := strings.ToLower(strings.TrimSpace(parts[0]))
 			if _, ok := urls[key]; ok {
+				fmt.Println("**** wtf")
 				glog.Warningf("duplicate key %s!", key)
 			}
 			urls[key] = strings.TrimSpace(parts[1])
@@ -77,31 +81,61 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, dest, 302)
 }
 
-func onexit() {
-	fmt.Println("got here")
-}
-
 func main() {
-	defer onexit()
 	runtime.GOMAXPROCS(runtime.NumCPU())
-	loadMap()
-	signal.Notify(sigChan, syscall.SIGHUP)
-	go func() {
-		for _ = range sigChan {
-			glog.Infoln("got SIGHUP; reloading urls.txt")
-			loadMap()
-		}
-	}()
-
 	var pPort = flag.Int("port", 80, "listening port")
 	var pUrl = flag.String("defaultUrl", "http://google.com", "default URL")
 	flag.Parse()
+	loadMap()
 
-	defaultUrl = *pUrl
-	http.HandleFunc("/", handler)
-	glog.Infof("pid %d; listening on port %d", os.Getpid(), *pPort)
-	err := http.ListenAndServe(fmt.Sprintf(":%d", *pPort), nil)
-	if err != nil {
-		glog.Fatalln(err)
-	}
+	var server *manners.GracefulServer
+	wg := &sync.WaitGroup{}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+		<-sigChan
+		server.Close()
+		close(quitChan)
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		signal.Notify(hupChan, syscall.SIGHUP)
+		for {
+			select {
+			case <-quitChan:
+				return
+			case <-hupChan:
+				glog.Infoln("got SIGHUP; reloading urls.txt")
+				loadMap()
+			}
+		}
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+
+		defaultUrl = *pUrl
+		http.HandleFunc("/", handler)
+		glog.Infof("pid %d; listening on port %d", os.Getpid(), *pPort)
+
+		server = manners.NewWithServer(&http.Server{
+			Addr:         fmt.Sprintf(":%d", *pPort),
+			ReadTimeout:  10 * time.Second,
+			WriteTimeout: 10 * time.Second,
+		})
+
+		err := server.ListenAndServe()
+		if err != nil {
+			glog.Fatalln(err)
+		}
+	}()
+
+	wg.Wait()
+	glog.Info("server stopped")
+	glog.Flush()
 }
