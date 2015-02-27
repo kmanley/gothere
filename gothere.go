@@ -20,8 +20,8 @@ import (
 
 type UrlMap map[string]string
 
-// we use COW to handle reloading the map on SIGHUP; this avoids having to
-// use an expensive mutex in the HTTP handler
+// we use atomic pointer switching to handle reloading the map on SIGHUP,
+// this avoids having to use a more expensive mutex wait in the HTTP handler
 var urlmap unsafe.Pointer
 var defaultUrl string
 var hupChan = make(chan os.Signal, 1)
@@ -46,7 +46,6 @@ func loadMap() {
 		if len(parts) == 2 {
 			key := strings.ToLower(strings.TrimSpace(parts[0]))
 			if _, ok := urls[key]; ok {
-				fmt.Println("**** wtf")
 				glog.Warningf("duplicate key %s!", key)
 			}
 			urls[key] = strings.TrimSpace(parts[1])
@@ -67,18 +66,22 @@ func loadMap() {
 func handler(w http.ResponseWriter, r *http.Request) {
 	urls := *(*UrlMap)(atomic.LoadPointer(&urlmap))
 	dest, ok := urls[strings.ToLower(r.URL.Path)]
+	status := 302
 	if !ok {
 		glog.Warningf("no match for %s", r.URL.Path)
 		if defaultUrl != "" {
-			http.Redirect(w, r, defaultUrl, 302)
-			return
+			dest = defaultUrl
 		} else {
-			http.Error(w, "not found", 404)
-			return
+			dest = ""
+			status = 404
 		}
 	}
-	glog.Infof("%s %s %s %s", time.Now(), r.RemoteAddr, r.URL.Path, dest)
-	http.Redirect(w, r, dest, 302)
+	glog.Infof("%s %s %s %d", r.RemoteAddr, r.URL.Path, dest, status)
+	if status == 302 {
+		http.Redirect(w, r, dest, status)
+	} else {
+		http.Error(w, "not found", status)
+	}
 }
 
 func main() {
