@@ -71,8 +71,7 @@ stderr_logfile=/var/log/gothere-stderr
 ```
 
 ### Production use
-gothere currently powers [joyrd.link](http://joyrd.link), the short domain for my
-wife's indoor cycling studio.
+gothere currently powers [joyrideridgefield.com](http://joyrideridgefield.com) and [joyridewilton.com](http://joyridewilton.com)
 
 ### License
 
