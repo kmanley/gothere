@@ -34,7 +34,7 @@ Then just run gothere to start your redirector
 You can specify the listening port number via the **-port** option, 
 and the default URL to redirect to if the requested URL is not in the map
 via the **-defaultUrl** option. The rest of the options are for the 
-excellent [glog](https://github.com/golang/glog) logging library.
+excellent [glog](https://github.com/golang/glog) logging package.
 
 ```bash
 $ ./gothere -h
@@ -69,9 +69,6 @@ directory=/go/src/github.com/kmanley/gothere
 stdout_logfile=/var/log/gothere-stdout
 stderr_logfile=/var/log/gothere-stderr
 ```
-
-### Production use
-gothere currently powers [joyrideridgefield.com](http://joyrideridgefield.com) and [joyridewilton.com](http://joyridewilton.com)
 
 ### License
 
