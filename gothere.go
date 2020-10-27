@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"flag"
 	"fmt"
-	"github.com/golang/glog"
-	"github.com/mailgun/manners"
 	"net/http"
 	"os"
 	"os/signal"
@@ -16,6 +14,8 @@ import (
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/golang/glog"
 )
 
 type UrlMap map[string]string
@@ -91,7 +91,7 @@ func main() {
 	flag.Parse()
 	loadMap()
 
-	var server *manners.GracefulServer
+	var server *http.Server
 	wg := &sync.WaitGroup{}
 
 	wg.Add(1)
@@ -126,11 +126,11 @@ func main() {
 		http.HandleFunc("/", handler)
 		glog.Infof("pid %d; listening on port %d", os.Getpid(), *pPort)
 
-		server = manners.NewWithServer(&http.Server{
+		server = &http.Server{
 			Addr:         fmt.Sprintf(":%d", *pPort),
 			ReadTimeout:  10 * time.Second,
 			WriteTimeout: 10 * time.Second,
-		})
+		}
 
 		err := server.ListenAndServe()
 		if err != nil {
